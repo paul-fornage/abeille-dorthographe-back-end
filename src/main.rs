@@ -133,18 +133,17 @@ async fn google_callback(
             .same_site(SameSite::Lax)
             .build(),
     );
+
+    let new_user = User{
+        name: real_name,
+        image_url,
+        user_id: str_hash,
+    };
     
-    match User::find_by_id(str_hash, db).await {
-        Ok(user) => {
-            println!("user info found for {}", user.name);
-        },
-        Err(_) => {
-            println!("user info not found, creating new one.");
-            
-        },
+    match User::find_or_create(new_user, db).await {
+        Ok(_) => {},
+        Err(e) => {println!("failed to retrieve and create new user, likely a db connection problem. Error: {}", e);},
     }
-    
-    
     Ok(Redirect::to("/"))
 }
 
@@ -162,7 +161,6 @@ async fn index(db: Connection<Db>, user_id: UserID) -> String {
             format!("error while finding user: {}", err)
         }
     }
-    
 }
 
 #[get("/welcome")]
