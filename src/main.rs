@@ -2,27 +2,38 @@ use std::env;
 use crate::comb::Comb;
 use crate::game::Game;
 use crate::word_list::WordList;
-use rocket::Request;
 use dotenv::dotenv;
 use anyhow::{Context, Error, Result};
+use couch_rs::database::Database;
+use couch_rs::document::DocumentCollection;
+use couch_rs::error::CouchResult;
+use couch_rs::types::find::FindQuery;
 use reqwest::header::{ACCEPT, AUTHORIZATION, USER_AGENT};
-use reqwest::Response;
+use reqwest::{Client, Response};
 use rocket::http::{Cookie, CookieJar, SameSite, Status};
-use rocket::request;
 use rocket::response::{Debug, Redirect};
 use rocket::{get, routes};
 use rocket_oauth2::{OAuth2, TokenResponse};
 use serde_json::{self, Value};
-use sha3::{Digest, Sha3_256};
-use sqlx::{postgres::PgPool, *};
-use rocket_db_pools::{Database, Connection};
+use lazy_static::lazy_static;
 
-#[derive(Database)]
-#[database("postgres_db")]
-pub struct Db(sqlx::PgPool);
+lazy_static! {
+    /// This is an example for using doc comment attributes
+    static ref DB_CLIENT: couch_rs::Client = {
+        dotenv().ok();
+        let db_host: &str = &env::var("DATABASE_URL").expect("DATABASE_URL must be set in env");
+        let db_username: &str = &env::var("DATABASE_USERNAME").expect("DATABASE_USERNAME must be set in env");
+        let db_password: &str = &env::var("DATABASE_PASSWORD").expect("DATABASE_PASSWORD must be set in env");
 
+        let client = couch_rs::Client::new(db_host, db_username, db_password).expect("Error while connecting to database");
+        client
+    };
+    
+    static ref FR_WORD_LIST: WordList = WordList::try_from_file("fr_word_list.txt").expect("Error while loading word list");
+    
+    
+}
 
-struct UserID(String);
 
 mod comb;
 mod word_list;
@@ -30,10 +41,11 @@ mod utils;
 mod game;
 mod valid_word;
 mod user;
+mod lang;
 
 use rocket_cors::{AllowedHeaders, AllowedOrigins, Cors, CorsOptions};
-use sqlx::postgres::PgPoolOptions;
 use crate::user::User;
+use crate::utils::get_local_date;
 
 #[macro_use]
 extern crate rocket;
@@ -58,147 +70,52 @@ fn make_cors() -> Cors {
         .expect("error while building CORS")
 }
 
-#[rocket::async_trait]
-impl<'r> request::FromRequest<'r> for UserID {
-    type Error = ();
 
-    async fn from_request(request: &'r request::Request<'_>) -> request::Outcome<UserID, ()> {
-        let cookies = request
-            .guard::<&CookieJar<'_>>()
-            .await
-            .expect("request cookies");
 
-        let user_id_hashed: UserID = match cookies.get_private("user_id_hashed"){
-            None => {return request::Outcome::Forward(Status::Unauthorized)}
-            Some(cookie) => {UserID(cookie.value().to_string())}
-        };
 
-        request::Outcome::Success(user_id_hashed)
-
+#[get("/wordlist/<lang_code>")]
+async fn get_wordlist_for_lang(lang_code: &str) -> String {
+    if lang_code == "fr" {
+        FR_WORD_LIST.to_string()
+    } else {
+        "Not implemented yet".to_string()
     }
 }
 
 
-/// User information to be retrieved from the Google People API.
-#[derive(serde::Deserialize)]
-struct GoogleUserInfo {
-    name: String,
-    picture: String,
-    id: String,
-}
 
-#[get("/login/google")]
-fn google_login(oauth2: OAuth2<GoogleUserInfo>, cookies: &CookieJar<'_>) -> Redirect {
-    oauth2.get_redirect(cookies, &["profile"]).unwrap()
-}
+#[get("/dailygame/today")]
+async fn get_todays_game() -> String {
+    let db = DB_CLIENT.db("daily-games").await.expect("Error while connecting to database");
 
-#[get("/auth/google")]
-async fn google_callback(
-    db: Connection<Db>,
-    token: TokenResponse<GoogleUserInfo>,
-    cookies: &CookieJar<'_>,
-) -> Result<Redirect, Debug<Error>> {
-    // Use the token to retrieve the user's Google account information.
-    let user_info_resp: Response = reqwest::Client::builder()
-        .build()
-        .context("failed to build reqwest client")?
-        .get("https://www.googleapis.com/oauth2/v1/userinfo")
-        .header(AUTHORIZATION, format!("Bearer {}", token.access_token()))
-        .send()
-        .await
-        .context("failed to complete request")?;
-    
-    // \"id\": \"106788192500279318769\",
-    // \"name\": \"Paul Fornage\",
-    // \"given_name\": \"Paul\",
-    // \"family_name\": \"Fornage\",
-    // \"picture\": \"https://lh3.googleusercontent.com/a/ACg8ocJt_pxHv-RtMGSxDzK_5-WcKdWt6cQiMk_chxQw9c_vfeAL93sz=s96-c\"
-
-
-
-    let user_info: GoogleUserInfo = user_info_resp
-        .json()
-        .await
-        .context("failed to deserialize response")?;
-    let real_name = user_info.name;
-    let image_url = user_info.picture;
-    let user_id_from_google = user_info.id;
-
-    let hashed_id = Sha3_256::digest(user_id_from_google);
-    
-    let str_hash = base16ct::lower::encode_string(&hashed_id);
-
-    cookies.add_private(
-        Cookie::build(("user_id_hashed", str_hash.clone()))
-            .same_site(SameSite::Lax)
-            .build(),
-    );
-
-    let new_user = User{
-        name: real_name,
-        image_url,
-        user_id: str_hash,
-    };
-    
-    match User::find_or_create(new_user, db).await {
-        Ok(_) => {},
-        Err(e) => {println!("failed to retrieve and create new user, likely a db connection problem. Error: {}", e);},
-    }
-    Ok(Redirect::to("/"))
-}
-
-#[get("/logout")]
-fn logout(cookies: &CookieJar<'_>) -> Redirect {
-    cookies.remove(Cookie::from("user_id_hashed"));
-    Redirect::to("/")
-}
-
-#[get("/")]
-async fn index(db: Connection<Db>, user_id: UserID) -> String {
-    match User::find_by_id(user_id.0, db).await {
-        Ok(user) => {format!("{:?}", user)}
-        Err(err) => {
-            format!("error while finding user: {}", err)
+    let date = get_local_date().await;
+    let find_by_date = FindQuery::new(serde_json::json!({"date": date})).limit(1);
+    match db.find::<Game>(&find_by_date).await.expect("Error while finding game").get_data().first() {
+        Some(game) => {
+            serde_json::to_string(&game).expect("Error while serializing game")
+        }
+        None => {
+            let mut game = Game::new_daily_game(&FR_WORD_LIST).await;
+            db.save(&mut game).await.expect("Error while saving new daily game");
+            serde_json::to_string(&game).expect("Error while serializing game")
         }
     }
 }
 
-#[get("/welcome")]
-async fn welcome(db: Connection<Db>, user_id: UserID) -> String {
-    match User::find_by_id(user_id.0, db).await {
-        Ok(user) => {format!("{:?}", user)}
-        Err(_) => { "User does not exist".to_string() }
-    }
-}
 
-#[get("/", rank = 2)]
-fn index_anonymous() -> &'static str {
-    "Please login (/login/google)"
-}
+
 
 #[rocket::main]
 async fn main() -> Result<()> {
-    dotenv().ok();
-    let database_url = env::var("DATABASE_URL")?;
 
-    let pool = PgPoolOptions::new()
-        .max_connections(5)
-        .connect(&database_url)
-        .await?;
+
 
     rocket::build()
         .mount("/", routes![
-            index, 
-            google_callback, 
-            google_login,
-            logout,
-            index_anonymous,
-            welcome,
+            get_todays_game,
+            get_wordlist_for_lang,
         ])
         .attach(make_cors())
-        .attach(OAuth2::<GoogleUserInfo>::fairing("google"))
-        .attach(Db::init())
-        .manage(pool)
         .launch()
         .await?;
 
@@ -208,18 +125,13 @@ async fn main() -> Result<()> {
 
 #[cfg(test)]
 mod comb_tests {
-    // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
 
-
-    #[self::test]
-    fn run_sample_game_generation() {
-        let fr_word_list = WordList::try_from_file("fr_word_list.txt").unwrap();
-        let comb = Comb::new_random(&fr_word_list);
-        println!("Comb: {:#?}", comb);
-        let game = Game::new(comb, fr_word_list);
+    #[rocket::async_test]
+    async fn run_sample_game_generation() {
+        let game = Game::new_daily_game(&FR_WORD_LIST).await;
         println!("Valid words: {:#?}", game.valid_words);
 
-        println!("Game has {} possible words worth a total of {} points.", game.get_total_possible_words(), game.get_possible_points());
+        println!("Game has {} possible words worth a total of {} points.", game.total_words, game.total_points);
     }
 }

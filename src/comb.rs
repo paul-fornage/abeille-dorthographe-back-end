@@ -3,7 +3,7 @@ use crate::utils::{get_unique_letters};
 use crate::valid_word::ValidWord;
 use crate::word_list::WordList;
 
-#[derive(Debug)]
+#[derive(serde::Serialize, Debug, serde::Deserialize)]
 pub struct Comb {
     center_char: char,
     outer_chars: [char; 6],
@@ -24,8 +24,7 @@ impl Comb {
             current_unique_chars = get_unique_letters(current_word);
         }
         let center_letter_index: usize = rand::thread_rng().gen_range(0..7);
-
-        println!("found panagram: {current_word}");
+        
 
         Self{
             center_char: current_unique_chars.remove(center_letter_index),
@@ -54,7 +53,7 @@ impl Comb {
         }
     }
     
-    pub fn get_valid_words(&self, word_list: WordList) -> Vec<ValidWord> {
+    pub fn get_valid_words(&self, word_list: &WordList) -> Vec<ValidWord> {
         word_list.0.iter().filter_map(|word| {
             match self.check_word_status(word){
                 WordStatus::Valid => Some(ValidWord::new_unfound(word.clone(), false)),
