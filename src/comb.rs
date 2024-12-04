@@ -11,16 +11,16 @@ pub struct Comb {
 
 impl Comb {
     pub fn new_random(word_list: &WordList) -> Comb {
-        let num_words: usize = word_list.0.len();
+        let num_words: usize = word_list.words.len();
         let starting_index: usize = rand::thread_rng().gen_range(0..num_words);
         let mut index: usize = starting_index;
 
-        let mut current_word = &word_list.0[index];
+        let mut current_word = &word_list.words[index];
         let mut current_unique_chars = get_unique_letters(current_word);
 
         while current_unique_chars.len() != 7 {
             index += 1;
-            current_word = &word_list.0[index];
+            current_word = &word_list.words[index];
             current_unique_chars = get_unique_letters(current_word);
         }
         let center_letter_index: usize = rand::thread_rng().gen_range(0..7);
@@ -54,7 +54,7 @@ impl Comb {
     }
     
     pub fn get_valid_words(&self, word_list: &WordList) -> Vec<ValidWord> {
-        word_list.0.iter().filter_map(|word| {
+        word_list.words.iter().filter_map(|word| {
             match self.check_word_status(word){
                 WordStatus::Valid => Some(ValidWord::new_unfound(word.clone(), false)),
                 WordStatus::Panagram => Some(ValidWord::new_unfound(word.clone(), true)),

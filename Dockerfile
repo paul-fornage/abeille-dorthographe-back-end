@@ -31,6 +31,8 @@ RUN apt-get update && apt-get install -y \
 COPY --from=builder /usr/src/abeille-dorthographe/target/release/abeille-dorthographe .
 COPY Rocket.toml .
 COPY .env .
+COPY languages/ ./languages/
+
 # Set the entry point
 EXPOSE 8000
 CMD ["./abeille-dorthographe"]

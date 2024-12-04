@@ -5,6 +5,7 @@ use couch_rs::types::document::DocumentId;
 use serde::Serializer;
 use sha3::Digest;
 use crate::comb::Comb;
+use crate::lang::LanguageCode;
 use crate::utils::{get_local_date, get_point_value};
 use crate::valid_word::ValidWord;
 use crate::word_list::WordList;
@@ -19,7 +20,14 @@ pub struct Game{
     pub date: NaiveDate,
     pub total_words: u64,
     pub total_points: u64,
-    pub valid_words: Vec<ValidWord>
+    pub valid_words: Vec<ValidWord>,
+    pub language_code: LanguageCode,
+}
+
+#[derive(serde::Serialize, Debug, serde::Deserialize)]
+pub struct GameIdentifier {
+    pub date: NaiveDate,
+    pub language_code: LanguageCode,
 }
 
 impl Game{
@@ -38,6 +46,7 @@ impl Game{
             _rev: "".to_string(),
             total_points,
             valid_words,
+            language_code: word_list.language_code.clone(),
         }
     }
 
@@ -50,7 +59,7 @@ impl Game{
         let comb = Comb::new_random(&word_list);
         let today = get_local_date().await;
         
-        let id = base16ct::lower::encode_string(&sha3::Sha3_256::digest(&today.to_string()));
+        let id = base16ct::lower::encode_string(&sha3::Sha3_256::digest(format!("date:{}lang:{}", today.to_string(), word_list.language_code.code)));
 
         Game::new_id(comb, today, word_list, id)
     }
