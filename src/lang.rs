@@ -4,6 +4,7 @@ pub struct LanguageCode{
     pub code: String,
     pub name: String,
     pub letter_set: String,
+    pub flag_emoji: String,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]

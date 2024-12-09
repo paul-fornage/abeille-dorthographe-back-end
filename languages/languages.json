@@ -2,16 +2,19 @@
   {
     "code": "fr",
     "name": "French",
-    "letter_set": "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    "letter_set": "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+    "flag_emoji": "🇫🇷"
   },
   {
     "code": "en",
     "name": "English",
-    "letter_set": "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    "letter_set": "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+    "flag_emoji": "🇺🇸"
   },
   {
     "code": "cz",
     "name": "Czech",
-    "letter_set": "TOSEJANMŽCVIKLÁĚDYUZHBPRÍŘČĎÝŠŮŤÉŇFÚÓWXGÄŔĹŃÂÇˇËÌQĘĂÏØÈŻÜŰSSĐ"
+    "letter_set": "TOSEJANMŽCVIKLÁĚDYUZHBPRÍŘČĎÝŠŮŤÉŇFÚÓWXGÄŔĹŃÂÇˇËÌQĘĂÏØÈŻÜŰSSĐ",
+    "flag_emoji": "🇨🇿"
   }
 ]
