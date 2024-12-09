@@ -126,7 +126,7 @@ async fn get_available_games() -> String {
     serde_json::to_string(idents.get_data()).expect("Error while serializing game")
 }
 
-#[get("/api/<lang_code>/dailygame/today")]
+
 async fn get_todays_game(lang_code: &str) -> Option<String> {
     let date = get_local_date().await;
     match get_daily_game(lang_code, &date.to_string()).await {
@@ -157,6 +157,9 @@ async fn get_todays_game(lang_code: &str) -> Option<String> {
 
 #[get("/api/<lang_code>/dailygame/<date>")]
 async fn request_get_daily_game(lang_code: &str, date: &str) -> Option<String> {
+    if date == "today" {
+        return get_todays_game(lang_code).await;
+    }
     match get_daily_game(lang_code, date).await {
         Ok(game) => {
             Some(serde_json::to_string(&game).expect("Error while serializing game"))
@@ -202,9 +205,10 @@ async fn main() -> Result<()> {
 
     rocket::build()
         .mount("/", routes![
-            get_todays_game,
             get_wordlist_for_lang,
             get_supported_langs,
+            request_get_daily_game,
+            get_available_games,
         ])
         .attach(make_cors())
         .launch()
