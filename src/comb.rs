@@ -35,6 +35,11 @@ impl Comb {
     pub fn check_word_status(&self, word_to_check: &str) -> WordStatus {
         let mut contains_center: bool = false;
         let word_dedup = get_unique_letters(word_to_check);
+        
+        if word_to_check.len() < 4 {
+            return WordStatus::NotValid;
+        }
+        
         for char in &word_dedup{
             if char == &self.center_char {
                 contains_center = true;
