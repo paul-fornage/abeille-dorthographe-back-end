@@ -16,5 +16,11 @@
     "name": "Czech",
     "letter_set": "TOSEJANMŽCVIKLÁĚDYUZHBPRÍŘČĎÝŠŮŤÉŇFÚÓWXGÄŔĹŃÂÇˇËÌQĘĂÏØÈŻÜŰSSĐ",
     "flag_emoji": "🇨🇿"
+  },
+  {
+    "code": "es",
+    "name": "Spanish",
+    "letter_set": "ABSILMONDRETCJGÑZUQYVHPFX",
+    "flag_emoji": "🇪🇸"
   }
 ]
