@@ -54,14 +54,13 @@ impl Game{
     
 
 
-    pub async fn new_daily_game(word_list: &WordList) -> Self{
+    pub async fn new_daily_game(word_list: &WordList, date: NaiveDate) -> Self{
         
         let comb = Comb::new_random(&word_list);
-        let today = get_local_date().await;
         
-        let id = base16ct::lower::encode_string(&sha3::Sha3_256::digest(format!("date:{}lang:{}", today.to_string(), word_list.language_code.code)));
+        let id = base16ct::lower::encode_string(&sha3::Sha3_256::digest(format!("date:{}lang:{}", date.to_string(), word_list.language_code.code)));
 
-        Game::new_id(comb, today, word_list, id)
+        Game::new_id(comb, date, word_list, id)
     }
 }
 

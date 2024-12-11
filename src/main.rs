@@ -6,6 +6,7 @@ use crate::game::{Game, GameIdentifier};
 use crate::word_list::WordList;
 use dotenv::dotenv;
 use anyhow::{Context, Error, Result};
+use chrono::NaiveDate;
 use couch_rs::database::Database;
 use couch_rs::document::DocumentCollection;
 use couch_rs::error::{CouchError, CouchResult};
@@ -126,9 +127,7 @@ async fn get_available_games() -> String {
     serde_json::to_string(idents.get_data()).expect("Error while serializing game")
 }
 
-
-async fn get_todays_game(lang_code: &str) -> Option<String> {
-    let date = get_local_date().await;
+async fn get_or_generate_game(lang_code: &str, date: NaiveDate) -> Option<String> {
     match get_daily_game(lang_code, &date.to_string()).await {
         Ok(game) => {
             Some(serde_json::to_string(&game).expect("Error while serializing game"))
@@ -144,7 +143,7 @@ async fn get_todays_game(lang_code: &str) -> Option<String> {
                 }
             };
             let db = DB_CLIENT.db("daily-games").await.expect("Error while connecting to database");
-            let mut game = Game::new_daily_game(word_list).await;
+            let mut game = Game::new_daily_game(word_list, date).await;
             db.save(&mut game).await.expect("Error while saving new daily game");
             Some(serde_json::to_string(&game).expect("Error while serializing game"))
         }
@@ -158,7 +157,8 @@ async fn get_todays_game(lang_code: &str) -> Option<String> {
 #[get("/api/<lang_code>/dailygame/<date>")]
 async fn request_get_daily_game(lang_code: &str, date: &str) -> Option<String> {
     if date == "today" {
-        return get_todays_game(lang_code).await;
+        let date = get_local_date().await;
+        return get_or_generate_game(lang_code, date).await;
     }
     match get_daily_game(lang_code, date).await {
         Ok(game) => {
@@ -225,7 +225,8 @@ mod comb_tests {
     #[rocket::async_test]
     async fn run_sample_game_generation() {
         let word_list = WORD_LISTS.iter().find(|word_list| word_list.language_code.code == "fr").expect("Language not implemented yet");
-        let game = Game::new_daily_game(word_list).await;
+        let date = get_local_date().await;
+        let game = Game::new_daily_game(word_list, date).await;
         println!("Valid words: {:#?}", game.valid_words);
 
         println!("Game has {} possible words worth a total of {} points.", game.total_words, game.total_points);
@@ -235,5 +236,12 @@ mod comb_tests {
     async fn test_get_available_games() {
         let games_str = get_available_games().await;
         println!("available_games:\n{:#?}", games_str);
+    }
+
+    #[rocket::async_test]
+    async fn create_and_get_game() {
+        let date = NaiveDate::parse_from_str("2024-12-09", "%Y-%m-%d").unwrap();
+        let game_str = get_or_generate_game("cz", date).await.unwrap();
+        println!("game:\n{:#?}", game_str);
     }
 }
