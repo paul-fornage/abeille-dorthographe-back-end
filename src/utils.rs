@@ -4,14 +4,12 @@ use chrono::{DateTime, Datelike, Local, Utc};
 async fn get_local_time() -> DateTime<Local> {
     let client = AsyncSntpClient::new();
     let result = client.synchronize("pool.ntp.org").await.unwrap();
-// TODO, NTP error?!?!
+// TODO, NTP error?!?! Just try 5 times?
     DateTime::from(result.datetime().into_chrono_datetime().unwrap())
 }
 
 pub async fn get_local_date() -> chrono::NaiveDate {
-    get_local_time().await
-        .naive_local()
-        .date()
+    get_local_time().await.naive_utc().date()
 }
 
 pub fn get_unique_letters(word: &str) -> Vec<char> {
